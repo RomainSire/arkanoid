@@ -1,27 +1,17 @@
-import { Fireworks } from 'fireworks-js';
 import { useEffect, useRef, useState } from 'react';
+import { getGameDimensions, getInitialPositions, getPaddleRelativePosition, getScaledSpeed, initializeBricks } from '../lib/gameUtils';
+import { BrickType, Position } from '../lib/types';
 import Ball from './Ball';
 import Brick from './Brick';
+import GameOver from './GameOver';
 import Paddle from './Paddle';
+import StartScreen from './StartScreen';
+import Victory from './Victory';
 
-interface Position {
-  x: number;
-  y: number;
-}
-
-export interface BrickType {
-  id: number;
-  position: Position;
-  visible: boolean;
-}
 
 const Game = () => {
   // Add base speed constants
   const BASE_SPEED = 5;
-  const getScaledSpeed = () => {
-    const { width } = getGameDimensions();
-    return (BASE_SPEED * width) / 800; // Scale speed relative to default width
-  };
 
   // Start with default positions
   const [paddlePosition, setPaddlePosition] = useState<number>(350);
@@ -34,36 +24,11 @@ const Game = () => {
   const [hasWon, setHasWon] = useState<boolean>(false);
   const [isGameStarted, setIsGameStarted] = useState<boolean>(false);
   const gameLoopRef = useRef<number | undefined>(undefined);
-  const fireworksContainerRef = useRef<HTMLDivElement>(null);
-  const fireworksInstanceRef = useRef<Fireworks | null>(null);
-
-  const getGameDimensions = () => {
-    const gameContainer = document.querySelector('.game-container');
-    if (gameContainer) {
-      const rect = gameContainer.getBoundingClientRect();
-      return {
-        width: rect.width,
-        height: rect.height
-      };
-    }
-    return { width: 800, height: 600 }; // Default fallback
-  };
-
-  const getInitialPositions = () => {
-    const { width, height } = getGameDimensions();
-    return {
-      paddlePosition: width * 0.4375, // 35% from left (centered)
-      ballPosition: {
-        x: width * 0.5, // Center horizontally
-        y: height * 0.85 // Near the paddle but not too close
-      }
-    };
-  };
 
   // Update initial positions and speed
   useEffect(() => {
     const { paddlePosition: initialPaddle, ballPosition: initialBall } = getInitialPositions();
-    const scaledSpeed = getScaledSpeed();
+    const scaledSpeed = getScaledSpeed(BASE_SPEED);
     setPaddlePosition(initialPaddle);
     setBallPosition(initialBall);
     setBallDirection({ x: scaledSpeed, y: -scaledSpeed });
@@ -72,45 +37,19 @@ const Game = () => {
   // Initialize bricks with relative positions
   useEffect(() => {
     const { width, height } = getGameDimensions();
-    const initialBricks: BrickType[] = [];
-    for (let row = 0; row < 4; row++) {
-      for (let col = 0; col < 8; col++) {
-        initialBricks.push({
-          id: row * 8 + col,
-          position: {
-            x: (col * width / 8) + (width * 0.0125), // 1.25% margin
-            y: (row * height / 20) + (height * 0.083), // Start at ~8.3% from top
-          },
-          visible: true,
-        });
-      }
-    }
+    const initialBricks = initializeBricks(width, height);
     setBricks(initialBricks);
   }, []);
-
-  // Update paddle movement handler
-  const getRelativePosition = (clientX: number) => {
-    const gameContainer = document.querySelector('.game-container');
-    if (gameContainer) {
-      const containerRect = gameContainer.getBoundingClientRect();
-      const containerWidth = containerRect.width;
-      const paddleWidth = containerWidth * 0.125; // 12.5% of container width
-      const newPosition = clientX - containerRect.left - (paddleWidth / 2);
-      const maxPosition = containerWidth - paddleWidth;
-      return Math.max(0, Math.min(newPosition, maxPosition));
-    }
-    return 0;
-  };
 
   // Update the mouse move handler
   useEffect(() => {
     const handleMouseMove = (e: MouseEvent) => {
-      setPaddlePosition(getRelativePosition(e.clientX));
+      setPaddlePosition(getPaddleRelativePosition(e.clientX));
     };
 
     const handleTouchMove = (e: TouchEvent) => {
       e.preventDefault();
-      setPaddlePosition(getRelativePosition(e.touches[0].clientX));
+      setPaddlePosition(getPaddleRelativePosition(e.touches[0].clientX));
     };
 
     window.addEventListener('mousemove', handleMouseMove);
@@ -127,7 +66,7 @@ const Game = () => {
     const update = () => {
       setBallPosition((prev) => {
         const { width, height } = getGameDimensions();
-        const scaledSpeed = getScaledSpeed();
+        const scaledSpeed = getScaledSpeed(BASE_SPEED);
         const nextPos = {
           x: prev.x + ballDirection.x,
           y: prev.y + ballDirection.y,
@@ -225,44 +164,10 @@ const Game = () => {
     }
   }, [bricks, score]);
 
-  // Initialize fireworks when winning
-  useEffect(() => {
-    if (hasWon && fireworksContainerRef.current) {
-      fireworksInstanceRef.current = new Fireworks(fireworksContainerRef.current, {
-        autoresize: true,
-        opacity: 0.5,
-        acceleration: 1.05,
-        friction: 0.97,
-        gravity: 1.5,
-        particles: 50,
-        traceLength: 3,
-        traceSpeed: 10,
-        explosion: 5,
-        intensity: 30,
-        flickering: 50,
-        lineStyle: 'round',
-        hue: {
-          min: 0,
-          max: 360
-        },
-        delay: {
-          min: 30,
-          max: 60
-        }
-      });
-
-      fireworksInstanceRef.current.start();
-    }
-
-    return () => {
-      fireworksInstanceRef.current?.stop();
-    };
-  }, [hasWon]);
-
   // Update reset function to use scaled speed
   const resetGame = () => {
     const { paddlePosition: newPaddlePos, ballPosition: newBallPos } = getInitialPositions();
-    const scaledSpeed = getScaledSpeed();
+    const scaledSpeed = getScaledSpeed(BASE_SPEED);
     setBallPosition(newBallPos);
     setPaddlePosition(newPaddlePos);
     setBallDirection({ x: scaledSpeed, y: -scaledSpeed });
@@ -278,15 +183,7 @@ const Game = () => {
       </div>
       <div className="game-container">
         {!isGameStarted && !gameOver && !hasWon ? (
-          <div className="start-screen">
-            <h2>Ready to Play?</h2>
-            <button
-              className="restart-button"
-              onClick={() => setIsGameStarted(true)}
-            >
-              Start Game
-            </button>
-          </div>
+          <StartScreen  setIsGameStarted={setIsGameStarted} />
         ) : (
           <>
             <Paddle position={paddlePosition} />
@@ -298,44 +195,17 @@ const Game = () => {
           </>
         )}
         {hasWon && (
-          <>
-            <div
-              ref={fireworksContainerRef}
-              style={{
-                position: 'absolute',
-                top: 0,
-                left: 0,
-                width: '100%',
-                height: '100%',
-                pointerEvents: 'none'
-              }}
+          <Victory
+            setHasWon={setHasWon}
+            resetGame={resetGame}
+            score={score}
             />
-            <div className="victory">
-              <div>🎉 Amazing Victory! 🎉</div>
-              <div className="final-score">Final Score: {score}</div>
-              <button
-                className="restart-button"
-                onClick={() => {
-                  setHasWon(false);
-                  resetGame();
-                }}
-              >
-                Play Again
-              </button>
-            </div>
-          </>
         )}
         {gameOver && !hasWon && (
-          <div className="game-over">
-            <div>Game Over!</div>
-            <div className="final-score">Final Score: {score}</div>
-            <button
-              className="restart-button"
-              onClick={resetGame}
-            >
-              Try Again
-            </button>
-          </div>
+          <GameOver
+            score={score}
+            resetGame={resetGame}
+          />
         )}
       </div>
     </div>
