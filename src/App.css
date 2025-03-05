@@ -10,10 +10,11 @@ body {
 }
 
 #root {
-  max-width: 1280px;
+  width: 100%;
   margin: 0 auto;
-  padding: 2rem;
+  padding: clamp(0.5rem, 2vw, 2rem);
   text-align: center;
+  box-sizing: border-box;
 }
 
 .main-title {
@@ -21,7 +22,7 @@ body {
   color: white;
   text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.7),
     0 0 20px rgba(0, 0, 0, 0.5);
-  font-size: 3rem;
+  font-size: clamp(2rem, 5vw, 3rem);
 }
 
 .logo {
@@ -64,8 +65,9 @@ body {
 }
 
 .game-container {
-  width: 800px;
-  height: 600px;
+  width: min(800px, 95vw);
+  height: min(600px, 71.25vw);
+  /* Maintains 4:3 aspect ratio */
   margin: 0 auto;
   position: relative;
   background-color: #282c34;
@@ -75,47 +77,64 @@ body {
 
 .paddle {
   position: absolute;
-  bottom: 20px;
-  width: 100px;
-  height: 20px;
+  bottom: 3.33%;
+  /* 20px / 600px */
+  width: 12.5%;
+  /* 100px / 800px */
+  height: 3.33%;
+  /* 20px / 600px */
   background-color: #61dafb;
   border-radius: 4px;
 }
 
 .ball {
   position: absolute;
-  width: 15px;
-  height: 15px;
+  width: 1.875%;
+  /* 15px / 800px */
+  height: 2.5%;
+  /* 15px / 600px */
   background-color: #fff;
   border-radius: 50%;
 }
 
 .brick {
   position: absolute;
-  width: 80px;
-  height: 20px;
+  width: 10%;
+  /* 80px / 800px */
+  height: 3.33%;
+  /* 20px / 600px */
   background-color: #ff6b6b;
   border-radius: 4px;
   box-sizing: border-box;
 }
 
-.game-over {
+.game-over,
+.victory,
+.start-screen {
   position: absolute;
   top: 50%;
   left: 50%;
   transform: translate(-50%, -50%);
   color: white;
-  font-size: 32px;
+  font-size: clamp(1.5rem, 4vw, 2rem);
   font-weight: bold;
+  text-align: center;
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 20px;
+  width: 100%;
+}
+
+.victory {
+  color: #ffd700;
+  font-size: clamp(1.75rem, 5vw, 2.5rem);
+  text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.5);
 }
 
 .restart-button {
-  padding: 10px 20px;
-  font-size: 18px;
+  padding: clamp(8px, 2vw, 10px) clamp(16px, 3vw, 20px);
+  font-size: clamp(1rem, 3vw, 1.125rem);
   background-color: #61dafb;
   border: none;
   border-radius: 4px;
@@ -137,8 +156,8 @@ body {
 .stats {
   display: flex;
   justify-content: center;
-  gap: 40px;
-  margin-bottom: 20px;
+  gap: clamp(20px, 4vw, 40px);
+  margin-bottom: clamp(10px, 2vw, 20px);
 }
 
 .score,
@@ -150,7 +169,7 @@ body {
 
 .high-score {
   color: white;
-  font-size: 24px;
+  font-size: clamp(1.125rem, 3vw, 1.5rem);
   font-weight: bold;
   text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.7),
     0 0 10px rgba(0, 0, 0, 0.5);
@@ -159,25 +178,8 @@ body {
   background-color: rgba(0, 0, 0, 0.3);
 }
 
-.victory {
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  color: #ffd700;
-  font-size: 40px;
-  font-weight: bold;
-  text-align: center;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 20px;
-  width: 100%;
-  text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.5);
-}
-
 .final-score {
-  font-size: 24px;
+  font-size: clamp(1rem, 3vw, 1.5rem);
   margin-top: 10px;
 }
 
@@ -193,4 +195,14 @@ body {
 .start-screen h2 {
   font-size: 32px;
   margin-bottom: 20px;
+}
+
+@media (max-width: 500px) {
+  #root {
+    padding: 0.5rem;
+  }
+
+  .stats {
+    margin-bottom: 10px;
+  }
 }

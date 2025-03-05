@@ -16,9 +16,17 @@ export interface BrickType {
 }
 
 const Game = () => {
+  // Add base speed constants
+  const BASE_SPEED = 5;
+  const getScaledSpeed = () => {
+    const { width } = getGameDimensions();
+    return (BASE_SPEED * width) / 800; // Scale speed relative to default width
+  };
+
+  // Start with default positions
   const [paddlePosition, setPaddlePosition] = useState<number>(350);
   const [ballPosition, setBallPosition] = useState<Position>({ x: 400, y: 550 });
-  const [ballDirection, setBallDirection] = useState<Position>({ x: 5, y: -5 });
+  const [ballDirection, setBallDirection] = useState<Position>({ x: BASE_SPEED, y: -BASE_SPEED });
   const [bricks, setBricks] = useState<BrickType[]>([]);
   const [gameOver, setGameOver] = useState<boolean>(false);
   const [score, setScore] = useState<number>(0);
@@ -29,16 +37,49 @@ const Game = () => {
   const fireworksContainerRef = useRef<HTMLDivElement>(null);
   const fireworksInstanceRef = useRef<Fireworks | null>(null);
 
-  // Initialize bricks
+  const getGameDimensions = () => {
+    const gameContainer = document.querySelector('.game-container');
+    if (gameContainer) {
+      const rect = gameContainer.getBoundingClientRect();
+      return {
+        width: rect.width,
+        height: rect.height
+      };
+    }
+    return { width: 800, height: 600 }; // Default fallback
+  };
+
+  const getInitialPositions = () => {
+    const { width, height } = getGameDimensions();
+    return {
+      paddlePosition: width * 0.4375, // 35% from left (centered)
+      ballPosition: {
+        x: width * 0.5, // Center horizontally
+        y: height * 0.85 // Near the paddle but not too close
+      }
+    };
+  };
+
+  // Update initial positions and speed
   useEffect(() => {
+    const { paddlePosition: initialPaddle, ballPosition: initialBall } = getInitialPositions();
+    const scaledSpeed = getScaledSpeed();
+    setPaddlePosition(initialPaddle);
+    setBallPosition(initialBall);
+    setBallDirection({ x: scaledSpeed, y: -scaledSpeed });
+  }, []);
+
+  // Initialize bricks with relative positions
+  useEffect(() => {
+    const { width, height } = getGameDimensions();
     const initialBricks: BrickType[] = [];
     for (let row = 0; row < 4; row++) {
       for (let col = 0; col < 8; col++) {
         initialBricks.push({
           id: row * 8 + col,
           position: {
-            x: col * 100 + 10,
-            y: row * 30 + 50,
+            x: (col * width / 8) + (width * 0.0125), // 1.25% margin
+            y: (row * height / 20) + (height * 0.083), // Start at ~8.3% from top
           },
           visible: true,
         });
@@ -47,27 +88,46 @@ const Game = () => {
     setBricks(initialBricks);
   }, []);
 
-  // Handle paddle movement
+  // Update paddle movement handler
+  const getRelativePosition = (clientX: number) => {
+    const gameContainer = document.querySelector('.game-container');
+    if (gameContainer) {
+      const containerRect = gameContainer.getBoundingClientRect();
+      const containerWidth = containerRect.width;
+      const paddleWidth = containerWidth * 0.125; // 12.5% of container width
+      const newPosition = clientX - containerRect.left - (paddleWidth / 2);
+      const maxPosition = containerWidth - paddleWidth;
+      return Math.max(0, Math.min(newPosition, maxPosition));
+    }
+    return 0;
+  };
+
+  // Update the mouse move handler
   useEffect(() => {
     const handleMouseMove = (e: MouseEvent) => {
-      const gameContainer = document.querySelector('.game-container');
-      if (gameContainer) {
-        const containerRect = gameContainer.getBoundingClientRect();
-        const newPosition = e.clientX - containerRect.left - 50;
-        if (newPosition >= 0 && newPosition <= 700) {
-          setPaddlePosition(newPosition);
-        }
-      }
+      setPaddlePosition(getRelativePosition(e.clientX));
+    };
+
+    const handleTouchMove = (e: TouchEvent) => {
+      e.preventDefault();
+      setPaddlePosition(getRelativePosition(e.touches[0].clientX));
     };
 
     window.addEventListener('mousemove', handleMouseMove);
-    return () => window.removeEventListener('mousemove', handleMouseMove);
+    window.addEventListener('touchmove', handleTouchMove, { passive: false });
+
+    return () => {
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('touchmove', handleTouchMove);
+    };
   }, []);
 
-  // Game loop
+  // Update game loop with relative positions
   useEffect(() => {
     const update = () => {
       setBallPosition((prev) => {
+        const { width, height } = getGameDimensions();
+        const scaledSpeed = getScaledSpeed();
         const nextPos = {
           x: prev.x + ballDirection.x,
           y: prev.y + ballDirection.y,
@@ -76,9 +136,9 @@ const Game = () => {
         const newDirection = { ...ballDirection };
 
         // Wall collisions
-        if (nextPos.x <= 0 || nextPos.x >= 785) {
+        if (nextPos.x <= 0 || nextPos.x >= width * 0.98) { // 98% of width
           newDirection.x = -ballDirection.x;
-          nextPos.x = nextPos.x <= 0 ? 0 : 785;
+          nextPos.x = nextPos.x <= 0 ? 0 : width * 0.98;
         }
         if (nextPos.y <= 0) {
           newDirection.y = -ballDirection.y;
@@ -86,31 +146,29 @@ const Game = () => {
         }
 
         // Paddle collision
+        const paddleY = height * 0.93; // 93% from top
         if (
-          nextPos.y >= 560 &&
-          nextPos.y <= 580 &&
+          nextPos.y >= paddleY &&
+          nextPos.y <= paddleY + height * 0.033 &&
           nextPos.x >= paddlePosition &&
-          nextPos.x <= paddlePosition + 100
+          nextPos.x <= paddlePosition + width * 0.125
         ) {
           newDirection.y = -Math.abs(ballDirection.y);
-          newDirection.x = ballDirection.x;
-          nextPos.y = 559; // Place ball slightly above paddle
+          nextPos.y = paddleY - 1;
 
-          // Add slight angle change based on where ball hits paddle
-          const paddleCenter = paddlePosition + 50;
-          const hitOffset = nextPos.x - paddleCenter;
-          newDirection.x += hitOffset * 0.05; // Subtle angle change
+          // Improved paddle bounce physics
+          const hitPosition = (nextPos.x - paddlePosition) / (width * 0.125); // 0 to 1
+          const angleMultiplier = hitPosition - 0.5; // -0.5 to 0.5
+          newDirection.x = scaledSpeed * angleMultiplier * 2; // More intuitive angle
 
-          setBallDirection(newDirection);
-        }
-
-        // Update ball direction if changed
-        if (newDirection.x !== ballDirection.x || newDirection.y !== ballDirection.y) {
-          setBallDirection(newDirection);
+          // Ensure minimum horizontal speed
+          if (Math.abs(newDirection.x) < scaledSpeed * 0.2) {
+            newDirection.x = scaledSpeed * 0.2 * (angleMultiplier >= 0 ? 1 : -1);
+          }
         }
 
         // Game over check
-        if (nextPos.y > 600) {
+        if (nextPos.y > height) {
           setGameOver(true);
           setHighScore(prev => Math.max(prev, score));
           return prev;
@@ -121,9 +179,9 @@ const Game = () => {
           if (
             brick.visible &&
             nextPos.x >= brick.position.x &&
-            nextPos.x <= brick.position.x + 80 &&
+            nextPos.x <= brick.position.x + width * 0.1 && // 10% width for brick
             nextPos.y >= brick.position.y &&
-            nextPos.y <= brick.position.y + 20
+            nextPos.y <= brick.position.y + height * 0.033 // 3.33% height for brick
           ) {
             setBricks((prev) =>
               prev.map((b) =>
@@ -131,11 +189,16 @@ const Game = () => {
               )
             );
             newDirection.y = -ballDirection.y;
-            nextPos.y = brick.position.y + (ballDirection.y > 0 ? 0 : 20);
+            nextPos.y = brick.position.y + (ballDirection.y > 0 ? 0 : height * 0.033);
             setBallDirection(newDirection);
             setScore((prev) => prev + 10);
           }
         });
+
+        // Update ball direction if changed
+        if (newDirection.x !== ballDirection.x || newDirection.y !== ballDirection.y) {
+          setBallDirection(newDirection);
+        }
 
         return nextPos;
       });
@@ -196,6 +259,18 @@ const Game = () => {
     };
   }, [hasWon]);
 
+  // Update reset function to use scaled speed
+  const resetGame = () => {
+    const { paddlePosition: newPaddlePos, ballPosition: newBallPos } = getInitialPositions();
+    const scaledSpeed = getScaledSpeed();
+    setBallPosition(newBallPos);
+    setPaddlePosition(newPaddlePos);
+    setBallDirection({ x: scaledSpeed, y: -scaledSpeed });
+    setGameOver(false);
+    setScore(0);
+    setBricks(prev => prev.map(brick => ({ ...brick, visible: true })));
+  };
+
   return (
     <div>
       <div className="stats">
@@ -241,13 +316,8 @@ const Game = () => {
               <button
                 className="restart-button"
                 onClick={() => {
-                  setBallPosition({ x: 400, y: 550 });
-                  setBallDirection({ x: 5, y: -5 });
-                  setPaddlePosition(350);
                   setHasWon(false);
-                  setGameOver(false);
-                  setScore(0);
-                  setBricks(prev => prev.map(brick => ({ ...brick, visible: true })));
+                  resetGame();
                 }}
               >
                 Play Again
@@ -261,14 +331,7 @@ const Game = () => {
             <div className="final-score">Final Score: {score}</div>
             <button
               className="restart-button"
-              onClick={() => {
-                setBallPosition({ x: 400, y: 550 });
-                setBallDirection({ x: 5, y: -5 });
-                setPaddlePosition(350);
-                setGameOver(false);
-                setScore(0);
-                setBricks(prev => prev.map(brick => ({ ...brick, visible: true })));
-              }}
+              onClick={resetGame}
             >
               Try Again
             </button>
